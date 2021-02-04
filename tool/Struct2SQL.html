@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<!-- saved from url=(0023)http://10.1.56.26:6500/ -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <title>Struct2SQL</title>
+    <style>
+        .container {
+            display: flex;
+            flex-flow: column nowrap;
+            height: 99vh
+        }
+
+        .header {
+            flex: 0 0 10%;
+            background-color: gold;
+        }
+
+        .content {
+            flex: 0 0 100%;
+            background-color: firebrick;
+            display: flex;
+            flex-flow: row;
+        }
+        .input {
+            margin: 10% 10% 8px 10%;
+            border-radius: 5px;
+            width: 80%;
+            font-size: 17px;
+        }
+        .btn{
+            position: absolute;
+            left:65px;
+            bottom: 55px;
+            background-image: url("./run.png");
+            background-size: 100% 100%;
+            width: 54px;
+            height: 54px;
+            border: none;
+            border-radius: 27px;
+        }
+        .run {
+            background-image: url("./run.png");
+            background-size: 100% 100%;
+            width: 54px;
+            height: 54px;
+            border: none;
+            border-radius: 27px;
+            margin-right: 10%;
+			position:absolute;
+			left:46%;
+			top:27%;
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+
+    <div class="container">
+        <div class="content">
+            <div style="background-color: #b9dcb4;flex: 0 0 50%;">
+                <div>
+                    <textarea name="input" class="input" rows="25" id="text" placeholder="输入MySQL建表语句"></textarea>
+                    <button class="run" onclick="run()"></button>
+                </div>
+            </div>
+            <div style="background-color: #73ced9;flex: 0 0 50%;">
+                <div style="padding: 10px">
+                    <pre id="code"><br>type PageTest struct {<br>    Id      int32  `json:"id" gorm:"column:id"`           <br>    Name    string `json:"name" gorm:"column:name"`       <br>    OpType  int32  `json:"op_type" gorm:"column:op_type"` <br>    OpTime  int32  `json:"op_time" gorm:"column:op_time"` <br>}<br><br>func (t *PageTest)TableName()string{<br>    return "page_test"<br>}<br></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+  function run() {
+    var text = document.getElementById('text');
+    var context = get_struct(text.value);
+    if (context){
+      var code = document.getElementById('code');
+      code.innerText = context;
+    }
+  }
+
+  const GetUpword = (key) => {
+    return key.split("_").map(v => {
+      let [head, ...tail] = v.split('');
+      head = head.toLocaleUpperCase();
+      return [head, ...tail].join("")
+    }).join("");
+  };
+
+  function get_struct(input) {
+    try {
+      let {table_name, content} = getParseStr(input);
+      let key = "";
+      if (table_name) {
+        key = GetUpword(table_name);
+        content = `
+type ${key} struct {
+    ${content}
+}
+
+func (t *${key})TableName()string{
+    return "${table_name}"
+}
+`;
+        return content;
+      }else {
+        alert('SQL格式错误');
+      }
+    }catch (e) {
+      console.log(e);
+      alert('SQL格式错误');
+    }
+  }
+
+  const getParseStr = (str, shows = ['json', 'gorm']) => {
+    let origin_str = str;
+
+    const typeMap = {
+      "int64": /bigint/ig,
+      "time.Time":/timestamp/ig,
+      "int32": /int/ig,
+      "float32": /float|decimal/ig,
+      "float64": /double/ig,
+      "string": /char|varchar|text|blob/ig,
+    };
+
+    let skip_index = 0;
+    let table_name = '';
+
+    let content_list = origin_str.split("\n").map((v, index) => {
+
+      if (index === 0) {//获取表名
+        //判断是否包含`
+        if (v.indexOf("`") !== -1){//存在
+          table_name = v.split('`')[1];
+        }else {
+          table_name = v.replace(/(^\s*)/g, "").replace("("," (").split(" ")[2] ||""
+        }
+
+        return ""
+      } else if (v.replace(/(^\s*)/g, "").startsWith("PRIMARY") || v.replace(/(^\s*)/g, "").startsWith("primary")) {//获取主键
+        skip_index = index;
+        return ""
+      } else if (v.replace(/(^\s*)/g, "").startsWith(")")) {//没有主键
+        skip_index = index;
+        return ""
+      }
+      if (skip_index !== 0 && index >= skip_index) {//不处理了
+        return ""
+      }
+
+      const rows = v.replace(/(^\s*)/g, "").split(" ").filter(v => v !== "");
+
+      //特殊字段提示
+      const comlist = v.match(/COMMENT '(.*?)'/i);
+      let com = '';
+      if (comlist && comlist.length >= 2) {
+        com = `//${comlist[1]}`
+      }
+
+      let [key, key_type, is_unsigned] = rows;
+
+
+      key = key.replace(/`/ig, "");
+      let origin_key = key;
+
+
+      const typeKeys = Object.keys(typeMap);
+      for (let i=0;i < typeKeys.length;i++){
+        const k = typeKeys[i];
+        const test = typeMap[k];
+        if (key_type.match(test)) {
+          key_type = k;
+          break;
+        }
+      }
+
+
+      if (key_type.match(/int/ig) && is_unsigned === 'unsigned' && !key.match(/time/ig)) {//非负数为uint
+        if (!key_type.startsWith('u')) {
+          key_type = `u${key_type}`
+        }
+      }
+
+      //将key的下划线转为大写
+      key = GetUpword(key);
+
+
+      const hasTag = (tag) => {
+        return shows.some(v => v === tag)
+      };
+
+      let jsonField = hasTag('json') ? `json:"${origin_key}"` : '';
+      let gormField = hasTag('gorm') ? ` gorm:"column:${origin_key}"` : '';
+      let redisField = hasTag('redis') ? ` redis:"${origin_key}"` : '';
+
+      //标记
+      let tagField = (jsonField || gormField || redisField) ? `\`${jsonField}${gormField}${redisField}\`` : '';
+
+
+      // `    ${key}    ${key_type}    ${tagField}    ${com} \n`
+      return {
+        key,key_type,tagField,com
+      }
+    }).filter(v=>v);
+
+    //fmt
+    const long_key_length = content_list.map(v=>{
+      const {key} = v;
+      return key.length;
+    }).sort((a,b)=>{
+      return b<a;
+    }).pop();
+    const long_key_type_length = content_list.map(v=>{
+      const {key_type} = v;
+      return key_type.length;
+    }).sort((a,b)=>{
+      return b<a;
+    }).pop();
+    const long_tag_length = content_list.map(v=>{
+      const {tagField} = v;
+      return tagField.length;
+    }).sort((a,b)=>{
+      return b<a;
+    }).pop();
+
+    //key后面的空格数
+    const key_spaces = content_list.map(v=>{
+      const {key} = v;
+      let spaceStr = "";
+      for (let i=0;i<long_key_length - key.length + 1;i++){
+        spaceStr += " "
+      }
+      return spaceStr;
+    });
+
+    //key_type后面的空格数
+    const key_type_spaces = content_list.map(v=>{
+      const {key_type} = v;
+      let spaceStr = "";
+      for (let i=0;i<long_key_type_length - key_type.length + 1;i++){
+        spaceStr += " "
+      }
+      return spaceStr;
+    });
+    //tag后面的空格数
+    const tag_spaces = content_list.map(v=>{
+      const {tagField} = v;
+      let spaceStr = "";
+      for (let i=0;i<long_tag_length - tagField.length + 1;i++){
+        spaceStr += " "
+      }
+      return spaceStr;
+    });
+
+    const content = content_list.map((v,index)=>{
+      const {key,key_type,tagField,com} = v;
+      const key_space = key_spaces[index];
+      const key_type_space = key_type_spaces[index];
+      const tag_space = tag_spaces[index];
+
+      if (index === 0){
+        return `${key}${key_space} ${key_type} ${key_type_space}${tagField}${tag_space}${com}\n`
+      }else if (index === content_list.length-1){
+        return `    ${key}${key_space} ${key_type} ${key_type_space}${tagField}${tag_space}${com}`
+      }else {
+        return `    ${key}${key_space} ${key_type} ${key_type_space}${tagField}${tag_space}${com}\n`
+      }
+    }).join("");
+
+    return {
+      table_name,
+      content
+    }
+  };
+</script>
+
+</body></html>
