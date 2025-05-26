@@ -17,8 +17,5 @@ title: 自我介绍
 
 ## 联系我
 
-- WeiCha&nbsp;: 15327168996
-
-- Email&nbsp;: 791294825@qq.com
-
+- Email&nbsp;: huangzhiwuhan@gmail.com
 - GitHub: [https://github.com/bright1996](https://bright1996.github.io)
