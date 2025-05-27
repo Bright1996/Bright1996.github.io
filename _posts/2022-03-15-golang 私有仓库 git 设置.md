@@ -1,7 +1,7 @@
 ---
 layout: mypost
 title: golang 私有仓库 Git设置
-categories: [Git，golang]
+categories: [Git,golang]
 ---
 # 
 
