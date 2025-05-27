@@ -1,8 +1,8 @@
 @echo off
 
-echo 0.°²×°  1.Æô¶¯(8899)  2.±àÒë  3.²¿Êğ
+echo 0.å®‰è£…  1.å¯åŠ¨(8899)  2.ç¼–è¯‘  3.éƒ¨ç½²
 set input=
-set /p input=ÇëÊäÈëÑ¡Ïî:
+set /p input=è¯·è¾“å…¥é€‰é¡¹:
 
 if "%input%" == "0" call :installFunc
 if "%input%" == "1" call :startFunc  8899
@@ -24,13 +24,13 @@ call bundle exec jekyll build --destination=dist
 goto :eof
 
 :deployFunc
-REM ±àÒë
+REM ç¼–è¯‘
 call :buildFunc
-REM ÇĞ»»µ½·¢²¼¹¤¾ßÄ¿Â¼
+REM åˆ‡æ¢åˆ°å‘å¸ƒå·¥å…·ç›®å½•
 D:
 cd D:\vscode-work-space\workspace-go\blog-deploy
 go run main.go
-REM »Øµ½½Å±¾Ä¿Â¼
+REM å›åˆ°è„šæœ¬ç›®å½•
 %~d0
 cd %~dp0
 goto :eof
